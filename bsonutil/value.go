@@ -59,8 +59,16 @@ func Value(l *lua.LState, v lua.LValue) interface{} {
 		return m
 	case lua.LTUserData:
 		ud := v.(*lua.LUserData)
-		if v, ok := ud.Value.(*ObjectID); ok {
-			return v.OID
+		switch udt := ud.Value.(type) {
+		case *ObjectID:
+			return udt.OID
+		case *DateTime:
+			return udt.DT
+		case *Timestamp:
+			return udt.Ts
+		case *Null:
+			// TODO: consts value
+			return nil
 		}
 		panic(fmt.Sprintf("unknown lua userdata type: %s", t))
 	default:
@@ -77,6 +85,14 @@ func ToLuaValue(l *lua.LState, i interface{}) lua.LValue {
 	switch ii := i.(type) {
 	case primitive.ObjectID:
 		return LObjectID(l, ii)
+	case primitive.DateTime:
+		return LDateTime(l, ii)
+	case primitive.Timestamp:
+		return LTimestamp(l, ii)
+	case primitive.Null:
+		// TODO: return LNull from module.LNull
+		// return LNull(l)
+		return lua.LNil
 	case bool:
 		return lua.LBool(ii)
 	case int:

@@ -71,7 +71,7 @@ func objectIDToStringMethod(L *lua.LState) int {
 
 func objectIDEqMethod(L *lua.LState) int {
 	objectID1 := checkObjectID(L, 1)
-	objectID2 := checkObjectID(L, 2)
+	objectID2 := checkObjectID(L, 2) // REVIEW: ArgError required?
 
 	L.Push(lua.LBool(objectID1.OID == objectID2.OID))
 	return 1

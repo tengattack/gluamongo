@@ -63,7 +63,7 @@ func databaseGetCollectionNamesMethod(L *lua.LState) int {
 	ctx, cancel := db.Client.Context()
 	defer cancel()
 
-	options := ToBSON(L, 2)
+	options := bsonutil.ToBSON(L, 2)
 	if options == nil {
 		options = bson.M{}
 	}

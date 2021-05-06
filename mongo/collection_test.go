@@ -91,19 +91,32 @@ func TestInsertFindRemove(t *testing.T) {
 		  error(err);
 		end
 		mcoll:remove({}); -- remove all
-		local res, err = mcoll:insert({a = 1});
-		local res2, err2 = mcoll:find({a = 1});
+		local res, err = mcoll:insert({{a = 1, b = 2, c = mongo.Null, dt = mongo.DateTime(1620279393253), ts = mongo.Timestamp()}, {a = 1, b = 1, dt = mongo.DateTime(os.time() * 1000)}});
+		local res2, err2 = mcoll:find({a = 1}, {sort = {b = 1}});
 		local res3, err3 = mcoll:remove({a = 1});
+		local res4, err4 = mcoll:findOne({a = 1});
 		mongoClient:disconnect();
-		return res, err, res2, err2, res3, err3
+
+		-- print result
+		for k, v in pairs(res2[2]) do
+		  print(tostring(k) .. ': ' .. tostring(v));
+		end
+
+		return res, err, res2, err2, res3, err3, res4, err4
 	`
 
 	require.NoError(L.DoString(script))
-	require.Equal(6, L.GetTop())
-	assert.Equal(map[string]interface{}{"nInserted": 1}, bsonutil.GetValue(L, 1))
+	require.Equal(8, L.GetTop())
+	assert.Equal(map[string]interface{}{"nInserted": 2}, bsonutil.GetValue(L, 1))
 	assert.Equal(lua.LNil, L.Get(2))
-	assert.NotEmpty(bsonutil.GetValue(L, 3))
 	assert.Equal(lua.LNil, L.Get(4))
-	assert.Equal(map[string]interface{}{"nRemoved": 1}, bsonutil.GetValue(L, 5))
+	assert.Equal(map[string]interface{}{"nRemoved": 2}, bsonutil.GetValue(L, 5))
 	assert.Equal(lua.LNil, L.Get(6))
+	assert.Equal(lua.LNil, L.Get(7))
+	assert.Equal(lua.LNil, L.Get(8))
+
+	v := bsonutil.GetValue(L, 3)
+	require.Len(v, 2)
+	// 4 keys: _id, a, b, dt
+	assert.Len(v.([]interface{})[0], 4)
 }

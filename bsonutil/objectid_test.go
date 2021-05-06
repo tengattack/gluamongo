@@ -23,13 +23,14 @@ func TestObjectID(t *testing.T) {
 		local oid2 = bson.ObjectID('6092e50e4ed1be4939967323')
 		local oid3 = bson.ObjectID('6092e50e4ed1be4939967323')
 		print(oid1)
-		return oid1 == oid2, oid1 ~= oid2, oid2 == oid3
+		return oid1 == oid2, oid1 == 0, oid1 ~= oid2, oid2 == oid3
 	`
 	require.NoError(L.DoString(script))
-	require.Equal(3, L.GetTop())
+	require.Equal(4, L.GetTop())
 	assert.Equal(lua.LFalse, L.Get(1))
-	assert.Equal(lua.LTrue, L.Get(2))
+	assert.Equal(lua.LFalse, L.Get(2))
 	assert.Equal(lua.LTrue, L.Get(3))
+	assert.Equal(lua.LTrue, L.Get(4))
 
 	script = `
 		local bson = require 'bson'

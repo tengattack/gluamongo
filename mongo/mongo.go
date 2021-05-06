@@ -6,10 +6,13 @@ import (
 )
 
 var exports = map[string]lua.LGFunction{
-	"Client":   newClient,
-	"ObjectID": bsonutil.NewObjectID,
+	"Client":    newClient,
+	"ObjectID":  bsonutil.NewObjectID,
+	"DateTime":  bsonutil.NewDateTime,
+	"Timestamp": bsonutil.NewTimestamp,
 }
 
+// Loader mongo module loader
 func Loader(L *lua.LState) int {
 	mod := L.SetFuncs(L.NewTable(), exports)
 	L.Push(mod)
@@ -17,12 +20,11 @@ func Loader(L *lua.LState) int {
 	L.SetField(mod, "_DEBUG", lua.LBool(false))
 	L.SetField(mod, "_VERSION", lua.LString("0.0.0"))
 
-	// ObjectID
-	// BSON
-
-	// consts
-
 	registerType(L)
+
+	// consts, after type registered
+	L.SetField(mod, "Null", bsonutil.LNull(L))
+
 	return 1
 }
 

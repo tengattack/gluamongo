@@ -1,6 +1,8 @@
 package gluamongo_mongo
 
 import (
+	"fmt"
+
 	"github.com/tengattack/gluamongo/bsonutil"
 	lua "github.com/yuin/gopher-lua"
 	"go.mongodb.org/mongo-driver/bson"
@@ -47,24 +49,87 @@ func checkCollection(L *lua.LState) *Collection {
 	return nil
 }
 
+func toNumber(v interface{}) (int64, error) {
+	switch i := v.(type) {
+	case int64:
+		return i, nil
+	case int32:
+		return int64(i), nil
+	}
+	return 0, fmt.Errorf("unknown value: %v", v)
+}
+
+func collectionFindOptions(opts interface{}) (*options.FindOptions, error) {
+	fo := &options.FindOptions{}
+	if opts == nil {
+		return fo, nil
+	}
+	if m, ok := opts.(map[string]interface{}); ok {
+		if v, ok := m["projection"]; ok {
+			fo.SetProjection(v)
+		}
+		if v, ok := m["sort"]; ok {
+			fo.SetSort(v)
+		}
+		if v, ok := m["skip"]; ok {
+			i, err := toNumber(v)
+			if err != nil {
+				return nil, err
+			}
+			fo.SetSkip(i)
+		}
+		if v, ok := m["limit"]; ok {
+			i, err := toNumber(v)
+			if err != nil {
+				return nil, err
+			}
+			fo.SetLimit(i)
+		}
+	} else if m, ok := opts.(bson.D); ok {
+		for _, v := range m {
+			if v.Key == "projection" {
+				fo.SetProjection(v.Value)
+			} else if v.Key == "sort" {
+				fo.SetSort(v.Value)
+			} else if v.Key == "skip" {
+				i, err := toNumber(v)
+				if err != nil {
+					return nil, err
+				}
+				fo.SetSkip(i)
+			} else if v.Key == "limit" {
+				i, err := toNumber(v)
+				if err != nil {
+					return nil, err
+				}
+				fo.SetLimit(i)
+			}
+		}
+	}
+	return fo, nil
+}
+
 func collectionFindMethod(L *lua.LState) int {
 	coll := checkCollection(L)
 
-	query := CastBSON(L, 2)
-	projection := ToBSON(L, 2)
+	query := bsonutil.CastBSON(L, 2)
+	opts, err := collectionFindOptions(bsonutil.ToBSON(L, 3))
+	if err != nil {
+		L.ArgError(3, err.Error())
+		return 0
+	}
 
 	ctx, cancel := coll.Client.Context()
 	defer cancel()
 
-	// TODO: sort, limit, ObjectID
-	cur, err := coll.Collection.Find(ctx, query, &options.FindOptions{Projection: projection})
+	cur, err := coll.Collection.Find(ctx, query, opts)
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 
-	var results bson.A
+	var results []bson.M
 	err = cur.All(ctx, &results)
 	if err != nil {
 		L.Push(lua.LNil)
@@ -79,15 +144,35 @@ func collectionFindMethod(L *lua.LState) int {
 func collectionFindOneMethod(L *lua.LState) int {
 	coll := checkCollection(L)
 
-	query := CastBSON(L, 2)
-	projection := ToBSON(L, 2)
+	query := bsonutil.CastBSON(L, 2)
+	opts, err := collectionFindOptions(bsonutil.ToBSON(L, 3))
+	if err != nil {
+		L.ArgError(3, err.Error())
+		return 0
+	}
+	foOptions := &options.FindOneOptions{}
+	if opts != nil {
+		if opts.Projection != nil {
+			foOptions.SetProjection(opts.Projection)
+		}
+		if opts.Sort != nil {
+			foOptions.SetSort(opts.Sort)
+		}
+		if opts.Skip != nil {
+			foOptions.SetSkip(*opts.Skip)
+		}
+	}
 
 	ctx, cancel := coll.Client.Context()
 	defer cancel()
 
-	res := coll.Collection.FindOne(ctx, query, &options.FindOneOptions{Projection: projection})
-	err := res.Err()
+	res := coll.Collection.FindOne(ctx, query, foOptions)
+	err = res.Err()
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			L.Push(lua.LNil)
+			return 1
+		}
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
 		return 2
@@ -120,7 +205,7 @@ func newInsertResult(nInserted int) map[string]int {
 func collectionInsertMethod(L *lua.LState) int {
 	coll := checkCollection(L)
 
-	doc := CastBSON(L, 2)
+	doc := bsonutil.CastBSON(L, 2)
 
 	ctx, cancel := coll.Client.Context()
 	defer cancel()
@@ -153,14 +238,15 @@ func newRemoveResult(nRemoved int) map[string]int {
 func collectionRemoveMethod(L *lua.LState) int {
 	coll := checkCollection(L)
 
-	query := CastBSON(L, 2)
+	query := bsonutil.CastBSON(L, 2)
 	var justOne bool
 	lv := L.Get(3)
 	if lv.Type() == lua.LTBool {
 		justOne = lua.LVAsBool(lv)
 	} else {
-		options := ToBSON(L, 3)
+		options := bsonutil.ToBSON(L, 3)
 		if options != nil {
+			// TODO: bson.D
 			if v, ok := options.(map[string]interface{}); ok {
 				if v2, ok2 := v["justOne"]; ok2 {
 					if justOneVal, ok3 := v2.(bool); ok3 {
@@ -204,12 +290,12 @@ func newUpdateResult(res *mongo.UpdateResult) map[string]int {
 func collectionUpdateMethod(L *lua.LState) int {
 	coll := checkCollection(L)
 
-	query := CastBSON(L, 2)
-	document := CastBSON(L, 3)
+	query := bsonutil.CastBSON(L, 2)
+	document := bsonutil.CastBSON(L, 3)
 	opts := &options.UpdateOptions{}
 
 	var multi bool
-	options := ToBSON(L, 3)
+	options := bsonutil.ToBSON(L, 3)
 	if options != nil {
 		if v, ok := options.(map[string]interface{}); ok {
 			if v2, ok2 := v["multi"]; ok2 {

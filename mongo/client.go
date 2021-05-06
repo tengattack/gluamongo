@@ -164,7 +164,7 @@ func clientGetDatabaseNamesMethod(L *lua.LState) int {
 
 	ctx, cancel := client.Context()
 	defer cancel()
-	options := ToBSON(L, 2)
+	options := bsonutil.ToBSON(L, 2)
 	if options == nil {
 		options = bson.M{}
 	}
