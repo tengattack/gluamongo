@@ -1,4 +1,4 @@
-package gluacrypto
+package gluamongo
 
 import (
 	mongo "github.com/tengattack/gluamongo/mongo"
