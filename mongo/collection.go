@@ -22,12 +22,14 @@ type Collection struct {
 
 var collectionMethods = map[string]lua.LGFunction{
 	// "drop":                nil,
-	"find":    collectionFindMethod,
-	"findOne": collectionFindOneMethod,
-	"getName": collectionGetNameMethod,
-	"insert":  collectionInsertMethod,
-	"remove":  collectionRemoveMethod,
-	"update":  collectionUpdateMethod,
+	"aggregate": collectionAggregateMethod,
+	"count":     collectionCountMethod,
+	"find":      collectionFindMethod,
+	"findOne":   collectionFindOneMethod,
+	"getName":   collectionGetNameMethod,
+	"insert":    collectionInsertMethod,
+	"remove":    collectionRemoveMethod,
+	"update":    collectionUpdateMethod,
 }
 
 func pushCollection(L *lua.LState, client *Client, collection *mongo.Collection) {
@@ -53,10 +55,14 @@ func toNumber(v interface{}) (int64, error) {
 	switch i := v.(type) {
 	case int64:
 		return i, nil
+	case int:
+		return int64(i), nil
 	case int32:
 		return int64(i), nil
+	case float64:
+		return int64(i), nil
 	}
-	return 0, fmt.Errorf("unknown value: %v", v)
+	return 0, fmt.Errorf("unknown value: %v (%T)", v, v)
 }
 
 func collectionFindOptions(opts interface{}) (*options.FindOptions, error) {
@@ -107,6 +113,66 @@ func collectionFindOptions(opts interface{}) (*options.FindOptions, error) {
 		}
 	}
 	return fo, nil
+}
+
+func collectionAggregateMethod(L *lua.LState) int {
+	coll := checkCollection(L)
+
+	query := bsonutil.CastBSON(L, 2)
+
+	ctx, cancel := coll.Client.Context()
+	defer cancel()
+
+	cur, err := coll.Collection.Aggregate(ctx, query)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	var results []bson.M
+	err = cur.All(ctx, &results)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	L.Push(bsonutil.ToLuaValue(L, results))
+	return 1
+}
+
+func collectionCountMethod(L *lua.LState) int {
+	coll := checkCollection(L)
+
+	query := bsonutil.CastBSON(L, 2)
+	opts, err := collectionFindOptions(bsonutil.ToBSON(L, 3))
+	if err != nil {
+		L.ArgError(3, err.Error())
+		return 0
+	}
+	countOptions := &options.CountOptions{}
+	if opts != nil {
+		if opts.Limit != nil {
+			countOptions.SetLimit(*opts.Limit)
+		}
+		if opts.Skip != nil {
+			countOptions.SetSkip(*opts.Skip)
+		}
+	}
+
+	ctx, cancel := coll.Client.Context()
+	defer cancel()
+
+	count, err := coll.Collection.CountDocuments(ctx, query, countOptions)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	L.Push(lua.LNumber(count))
+	return 1
 }
 
 func collectionFindMethod(L *lua.LState) int {

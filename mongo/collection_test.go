@@ -38,6 +38,51 @@ func TestGetCollection(t *testing.T) {
 	assert.Equal(lua.LNil, L.Get(2))
 }
 
+func TestInsertAggregateCount(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	// test start
+	L := lua.NewState()
+	defer L.Close()
+	gluamongo.Preload(L)
+
+	script := getLuaMongoConnection() + `
+		if err ~= nil then
+		  error(err);
+		end
+		local mcoll, err = mongoClient:getCollection('test', 'test');
+		if err ~= nil then
+		  error(err);
+		end
+		mcoll:remove({}); -- remove all
+		local res, err = mcoll:insert({{a = 1, b = 2, c = mongo.Null, dt = mongo.DateTime(1620279393253), ts = mongo.Timestamp()}, {a = 1, b = 1, dt = mongo.DateTime(os.time() * 1000)}});
+		local res2, err2 = mcoll:aggregate('[{"$match": {"a": 1}}]');
+		local res3, err3 = mcoll:count({a = 1}, {limit = 1});
+		mongoClient:disconnect();
+
+		-- print result
+		for k, v in pairs(res2[1]) do
+		  print(tostring(k) .. ': ' .. tostring(v));
+		end
+
+		return res, err, res2, err2, res3, err3
+	`
+
+	require.NoError(L.DoString(script))
+	require.Equal(6, L.GetTop())
+	assert.Equal(map[string]interface{}{"nInserted": 2}, bsonutil.GetValue(L, 1))
+	assert.Equal(lua.LNil, L.Get(2))
+	assert.Equal(lua.LNil, L.Get(4))
+	assert.Equal(lua.LNil, L.Get(6))
+	assert.Equal(1, bsonutil.GetValue(L, 5))
+
+	v := bsonutil.GetValue(L, 3)
+	require.Len(v, 2)
+	// 4 keys: _id, a, b, dt, ts
+	assert.Len(v.([]interface{})[0], 5)
+}
+
 func TestInsertUpdateRemove(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
