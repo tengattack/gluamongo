@@ -252,7 +252,7 @@ func collectionFindOneMethod(L *lua.LState) int {
 		return 2
 	}
 
-	L.Push(bsonutil.ToLuaValue(L, res))
+	L.Push(bsonutil.ToLuaValue(L, result))
 	return 1
 }
 
