@@ -6,5 +6,6 @@ import (
 )
 
 func Preload(L *lua.LState) {
+	mongo.RegisterType(L)
 	L.PreloadModule("mongo", mongo.Loader)
 }

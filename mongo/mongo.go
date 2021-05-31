@@ -20,15 +20,14 @@ func Loader(L *lua.LState) int {
 	L.SetField(mod, "_DEBUG", lua.LBool(false))
 	L.SetField(mod, "_VERSION", lua.LString("0.0.0"))
 
-	registerType(L)
-
 	// consts, after type registered
 	L.SetField(mod, "Null", bsonutil.LNull(L))
 
 	return 1
 }
 
-func registerType(L *lua.LState) {
+// RegisterType registers mongo types
+func RegisterType(L *lua.LState) {
 	bsonutil.RegisterType(L)
 
 	mtClient := L.NewTypeMetatable(CLIENT_TYPENAME)
